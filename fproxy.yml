@@ -1,0 +1,11 @@
+app:
+  listen_at: :3000
+
+proxy:
+  - name: front
+    prefix: /
+    target: ./www
+
+  - name: backend
+    prefix: /api
+    target: http://119.23.215.60:48080/

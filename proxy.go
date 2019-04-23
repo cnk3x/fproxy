@@ -17,14 +17,14 @@ const (
 )
 
 func Ps(target *url.URL) http.Handler{
-	return &proxy{target:target}
+	return &ProxyTarget{target:target}
 }
 
-type proxy struct {
+type ProxyTarget struct {
 	target *url.URL
 }
 
-func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request)  {
+func (p *ProxyTarget) ServeHTTP(w http.ResponseWriter, r *http.Request)  {
 	var realIp string
 	if ip := r.Header.Get(HeaderXForwardedFor); ip != "" {
 		realIp = strings.Split(ip, ", ")[0]
