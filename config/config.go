@@ -25,7 +25,7 @@ func Register(decoder Decoder, ext ...string) {
 	}
 }
 
-func UnmarshalFile(in string, out interface{}) error {
+func Unmarshal(in string, out interface{}) error {
 	var (
 		ext    = strings.TrimPrefix(filepath.Ext(in), ".")
 		v, err = ioutil.ReadFile(in)

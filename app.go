@@ -5,12 +5,23 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"runtime"
 	"sort"
 	"strings"
 )
 
-type App []*Proxy
+func NewApp() *App {
+	return &App{
+		proxies: make(map[string]*Proxy),
+		prefixes: make([]string, 0),
+	}
+}
+
+type App struct {
+	proxies  map[string]*Proxy
+	prefixes []string
+}
 
 type Proxy struct {
 	Name    string
@@ -20,6 +31,8 @@ type Proxy struct {
 }
 
 func (sa *App) Handle(name, prefix, targetUrl string) {
+	prefix = path.Clean("/" + prefix + "/")
+
 	var handler http.Handler
 	strip := strings.HasSuffix(targetUrl, "/")
 	targetUrl = strings.TrimSuffix(targetUrl, "/")
@@ -37,9 +50,14 @@ func (sa *App) Handle(name, prefix, targetUrl string) {
 	if strip {
 		handler = http.StripPrefix(prefix, handler)
 	}
+	p := &Proxy{Name: name, Prefix: prefix, Target: targetUrl, handler: handler}
 
-	*sa = append(*sa, &Proxy{Name: name, Prefix: prefix, Target: targetUrl, handler: handler})
-	sort.Sort(sa)
+	if _, find := sa.proxies[prefix]; !find {
+		sa.prefixes = append(sa.prefixes, prefix)
+		sort.Sort(PathSorter(sa.prefixes))
+	}
+
+	sa.proxies[prefix] = p
 }
 
 func (sa *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,33 +75,36 @@ func (sa *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	path := r.URL.Path
-	for _, sr := range *sa {
-		if strings.HasPrefix(strings.ToLower(path), sr.Prefix) {
-			sr.handler.ServeHTTP(w, r)
+	urlPath := r.URL.Path
+	for _, prefix := range sa.prefixes {
+		if strings.HasPrefix(strings.ToLower(urlPath), prefix) {
+			proxy := sa.proxies[prefix]
+			proxy.handler.ServeHTTP(w, r)
 			return
 		}
 	}
 
-	http.Error(w, path+" not found", http.StatusNotFound)
+	http.Error(w, urlPath+" not found", http.StatusNotFound)
 }
 
-func (sa *App) Len() int {
-	return len(*sa)
+type PathSorter []string
+
+func (sa PathSorter) Len() int {
+	return len(sa)
 }
 
-func (sa *App) Less(i, j int) bool {
+func (sa PathSorter) Less(i, j int) bool {
 	var (
-		l1 = len(strings.Split((*sa)[i].Prefix, "/"))
-		l2 = len(strings.Split((*sa)[j].Prefix, "/"))
+		l1 = len(strings.Split((sa)[i], "/"))
+		l2 = len(strings.Split((sa)[j], "/"))
 	)
 	if l1 == l2 {
-		l1 = len((*sa)[j].Prefix)
-		l2 = len((*sa)[i].Prefix)
+		l1 = len((sa)[j])
+		l2 = len((sa)[i])
 	}
 	return l1 > l2
 }
 
-func (sa *App) Swap(i, j int) {
-	(*sa)[i], (*sa)[j] = (*sa)[j], (*sa)[i]
+func (sa PathSorter) Swap(i, j int) {
+	(sa)[i], (sa)[j] = (sa)[j], (sa)[i]
 }

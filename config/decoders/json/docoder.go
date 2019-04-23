@@ -6,7 +6,7 @@ import (
 )
 
 func init() {
-	config.Register(&Decoder{}, "yaml", "yml")
+	config.Register(&Decoder{}, "json")
 }
 
 type Decoder struct {
@@ -14,7 +14,8 @@ type Decoder struct {
 
 func (d *Decoder) Decode(v []byte, out interface{}) error {
 	txt := []rune(string(v))
-	r := make([]rune, len(txt))
+	l := len(txt)
+	r := make([]rune, l)
 	j := 0
 	closed := true
 	comment := false
@@ -23,21 +24,25 @@ func (d *Decoder) Decode(v []byte, out interface{}) error {
 		case '\n':
 			closed = true
 			comment = false
-			r[i] = c
-			i++
 		case '"':
 			if comment {
 				continue
 			}
-			if txt[i-1] == '\\' {
-				
+			if i > 0 && txt[i-1] != '\\' {
+				closed = !closed
 			}
-			closed = !closed
+		case '/':
+			if comment {
+				continue
+			}
+			if closed && i == 0 && i < l-1 && txt[i+1] == '/' {
+				comment = true
+				continue
+			}
 		}
 
-		if closed {
-
-		}
+		r[j] = c
+		j++
 	}
-	return json.Unmarshal(v, out)
+	return json.Unmarshal([]byte(string(r)), out)
 }

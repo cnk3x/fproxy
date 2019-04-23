@@ -2,16 +2,17 @@ package yaml
 
 import (
 	"fproxy/config"
-	"gopkg.in/yaml.v2"
+
+	"github.com/BurntSushi/toml"
 )
 
 func init() {
-	config.Register(&Decoder{}, "yaml", "yml")
+	config.Register(&Decoder{}, "toml", "tml")
 }
 
 type Decoder struct {
 }
 
 func (d *Decoder) Decode(v []byte, out interface{}) error {
-	return yaml.Unmarshal(v, out)
+	return toml.Unmarshal(v, out)
 }

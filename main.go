@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"fproxy/config"
 	"log"
 	"net/http"
 	"os"
@@ -10,7 +10,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
+
+	_ "fproxy/config/decoders/json"
+	_ "fproxy/config/decoders/toml"
+	_ "fproxy/config/decoders/xml"
+	_ "fproxy/config/decoders/yaml"
 )
 
 const (
@@ -30,7 +34,7 @@ func main() {
 
 	var cfg string
 	flag := pflag.NewFlagSet(NAME, pflag.ContinueOnError)
-	flag.StringVarP(&cfg, "config", "c", "fproxy.toml", "配置文件路径")
+	flag.StringVarP(&cfg, "config", "c", "fproxy.yml", "配置文件路径")
 	flag.StringVarP(&listenAt, "listen", "l", ":3000", "发布端口")
 	flag.StringSliceVarP(&proxy, "proxy", "p", []string{}, "代理链")
 	flag.Usage = func() {
@@ -48,10 +52,7 @@ func main() {
 	var c AppConfig
 
 	if cfg != "" {
-		v, err := ioutil.ReadFile(cfg)
-		if err == nil {
-			err = yaml.Unmarshal(v, &c)
-		}
+		err := config.Unmarshal(cfg, &c)
 		if err != nil {
 			if cfg != "fproxy.yml" {
 				log.Fatal(err)
@@ -77,20 +78,19 @@ func main() {
 		flag.Usage()
 	}
 
-	fmt.Println(proxy)
-
 	Run(c)
 }
 
 func Run(c AppConfig) {
-	sApp := new(App)
+	sApp := NewApp()
 
 	for _, s := range c.Proxy {
 		sApp.Handle(s.Name, s.Prefix, s.Target)
 	}
 
-	for _, app := range *sApp {
-		fmt.Printf("name=%s, prefix=%s, target=%s\n", app.Name, app.Prefix, app.Target)
+	for _, prefix := range sApp.prefixes {
+		app := sApp.proxies[prefix]
+		log.Printf("name=%s, prefix=%s, target=%s\n", app.Name, app.Prefix, app.Target)
 	}
 
 	log.Printf("%-6s%s", "发布地址 ", c.App.ListenAt)

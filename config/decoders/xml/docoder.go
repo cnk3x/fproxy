@@ -6,7 +6,7 @@ import (
 )
 
 func init() {
-	config.Register(&Decoder{}, "yaml", "yml")
+	config.Register(&Decoder{}, "xml")
 }
 
 type Decoder struct {
