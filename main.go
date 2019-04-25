@@ -13,50 +13,60 @@ import (
 
 	_ "fproxy/config/decoders/json"
 	_ "fproxy/config/decoders/toml"
-	_ "fproxy/config/decoders/xml"
 	_ "fproxy/config/decoders/yaml"
 )
 
 const (
-	NAME        = "fproxy"
-	DESCRIPTION = "前端代理工具"
-	VERSION     = "1.0.0"
-	BUILD       = "master"
+	Name        = "fproxy"
+	Description = "前端代理工具"
+	Version     = "1.0.0"
+	BuildTime   = ""
 )
 
 func main() {
-	fmt.Fprintf(os.Stdin, "%s - %s\n\n版本:\n  %s\n编译时间:\n  %s\n", NAME, DESCRIPTION, VERSION, BUILD)
+	fmt.Printf("%s - %s - %s\n\n", Name, Description, Version)
 
 	var (
 		listenAt string
 		proxy    []string
+		help     bool
+		dbg      bool
 	)
 
 	var cfg string
-	flag := pflag.NewFlagSet(NAME, pflag.ContinueOnError)
-	flag.StringVarP(&cfg, "config", "c", "fproxy.yml", "配置文件路径")
-	flag.StringVarP(&listenAt, "listen", "l", ":3000", "发布端口")
+	flag := pflag.NewFlagSet(Name, pflag.ContinueOnError)
+	flag.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
+
+	flag.StringVarP(&cfg, "config", "c", "", "配置文件路径")
+	flag.StringVarP(&listenAt, "listen", "l", ":80", "发布端口")
 	flag.StringSliceVarP(&proxy, "proxy", "p", []string{}, "代理链")
+	flag.BoolVarP(&dbg, "debug", "d", false, "调试模式")
+	flag.BoolVarP(&help, "help", "h", false, "帮助信息")
+
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "参数:\n")
+		if len(BuildTime) > 0 {
+			fmt.Printf("编译时间:\n  %s\n", BuildTime)
+		}
+		fmt.Printf("参数:\n")
 		flag.PrintDefaults()
 		fmt.Println()
-		os.Exit(1)
 	}
-	fmt.Println()
-	flag.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
-	flag.Parse(os.Args[1:])
 
-	log.SetFlags(log.LUTC | log.Lshortfile)
+	_ = flag.Parse(os.Args[1:])
+
+	log.SetFlags(log.Ldate | log.Ltime)
+
+	if help {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	var c AppConfig
 
 	if cfg != "" {
 		err := config.Unmarshal(cfg, &c)
 		if err != nil {
-			if cfg != "fproxy.yml" {
-				log.Fatal(err)
-			}
+			log.Fatal(err)
 		}
 	}
 
@@ -65,17 +75,51 @@ func main() {
 	}
 
 	if c.App.ListenAt == "" {
-		c.App.ListenAt = ":3000"
+		c.App.ListenAt = ":80"
+	}
+
+	if c.Proxy == nil {
+		c.Proxy = make(map[string]string)
 	}
 
 	for _, link := range proxy {
-		if pc := parseProxyLink(link); pc != nil {
-			c.Proxy = append(c.Proxy, pc)
+		i := strings.Index(link, "=")
+		l := len(link) - 1
+
+		switch i {
+		case -1:
+			c.Proxy["/"] = link
+		case 0:
+			c.Proxy["/"] = link[1:]
+		case l:
+			c.Proxy[link] = "./"
+		default:
+			c.Proxy[link[0:i]] = link[i+1:]
+		}
+	}
+
+	if len(c.Proxy) == 0 {
+		www := os.Getenv("www")
+		api := os.Getenv("api")
+
+		if api != "" {
+			c.Proxy["api"] = api
+
+			if www == "" {
+				www = "www"
+			}
+
+			c.Proxy["/"] = www
 		}
 	}
 
 	if len(c.Proxy) == 0 {
 		flag.Usage()
+		os.Exit(1)
+	}
+
+	if dbg {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	}
 
 	Run(c)
@@ -84,16 +128,16 @@ func main() {
 func Run(c AppConfig) {
 	sApp := NewApp()
 
-	for _, s := range c.Proxy {
-		sApp.Handle(s.Name, s.Prefix, s.Target)
+	for prefix, value := range c.Proxy {
+		sApp.Handle(prefix, value)
 	}
 
 	for _, prefix := range sApp.prefixes {
 		app := sApp.proxies[prefix]
-		log.Printf("name=%s, prefix=%s, target=%s\n", app.Name, app.Prefix, app.Target)
+		log.Printf("%s -> %s\n", app.Prefix, app.Target)
 	}
 
-	log.Printf("%-6s%s", "发布地址 ", c.App.ListenAt)
+	log.Printf("listen at %s", c.App.ListenAt)
 	s := &http.Server{
 		Handler:      sApp,
 		Addr:         c.App.ListenAt,
@@ -105,36 +149,4 @@ func Run(c AppConfig) {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func parseProxyLink(link string) *ProxyConfig {
-	if link != "" {
-		var (
-			name   string
-			prefix string
-			target string
-		)
-		s := strings.Split(link, ",")
-
-		for i := range s {
-			if strings.Contains(name, ":") || strings.HasPrefix(name, ".") {
-				target = s[i]
-			} else if strings.Contains(name, "/") {
-				prefix = s[i]
-			} else {
-				name = s[i]
-			}
-		}
-
-		if prefix == "" {
-			prefix = "/"
-		}
-
-		if name == "" {
-			name = strings.Replace(prefix, "/", "_", -1)
-		}
-
-		return &ProxyConfig{Name: name, Prefix: prefix, Target: target}
-	}
-	return nil
 }

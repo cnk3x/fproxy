@@ -13,7 +13,7 @@ import (
 
 func NewApp() *App {
 	return &App{
-		proxies: make(map[string]*Proxy),
+		proxies:  make(map[string]*Proxy),
 		prefixes: make([]string, 0),
 	}
 }
@@ -24,13 +24,12 @@ type App struct {
 }
 
 type Proxy struct {
-	Name    string
 	Prefix  string
 	Target  string
 	handler http.Handler
 }
 
-func (sa *App) Handle(name, prefix, targetUrl string) {
+func (sa *App) Handle(prefix, targetUrl string) {
 	prefix = path.Clean("/" + prefix + "/")
 
 	var handler http.Handler
@@ -50,7 +49,8 @@ func (sa *App) Handle(name, prefix, targetUrl string) {
 	if strip {
 		handler = http.StripPrefix(prefix, handler)
 	}
-	p := &Proxy{Name: name, Prefix: prefix, Target: targetUrl, handler: handler}
+
+	p := &Proxy{Prefix: prefix, Target: targetUrl, handler: handler}
 
 	if _, find := sa.proxies[prefix]; !find {
 		sa.prefixes = append(sa.prefixes, prefix)
@@ -95,14 +95,14 @@ func (sa PathSorter) Len() int {
 
 func (sa PathSorter) Less(i, j int) bool {
 	var (
-		l1 = len(strings.Split((sa)[i], "/"))
-		l2 = len(strings.Split((sa)[j], "/"))
+		l1 = len(strings.Split(sa[i], "/"))
+		l2 = len(strings.Split(sa[j], "/"))
 	)
 	if l1 == l2 {
-		l1 = len((sa)[j])
-		l2 = len((sa)[i])
+		l1 = len(sa[j])
+		l2 = len(sa[i])
 	}
-	return l1 > l2
+	return l1 < l2
 }
 
 func (sa PathSorter) Swap(i, j int) {

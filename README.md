@@ -12,6 +12,8 @@ go build
 ./fproxy 
 ```
 
+toml 
+
 ```toml
 [app]
 listen  =":3000"
@@ -19,12 +21,28 @@ listen  =":3000"
 [[proxy]]
 name    ="backend"
 prefix  ="/api"
-target  ="http://192.168.1.22:8080/"
+target  ="http://192.168.1.21:8080/"
 
 [[proxy]]
 name    ="front"
 prefix  ="/"
 target  ="www"
+```
+
+yaml
+
+```yaml
+app:
+  listen: :3000
+
+proxy:
+  - name: front
+    prefix: /
+    target: ./www
+
+  - name: backend
+    prefix: /api
+    target: http://192.168.1.21:8080/
 ```
 
 ```shell
